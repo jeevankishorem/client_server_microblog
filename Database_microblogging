@@ -1,0 +1,218 @@
+Data Definition Language:
+The below is the code for creating the main database tables in the POSTGRESQL database.
+Execute the commands corresponding to the sections to create tables for the microblogging service.
+
+--------------------------
+The below is the definition and schema for the database 
+
+--------------------
+USERS
+-----
+
+CREATE TABLE users(
+	user_id SERIAL PRIMARY KEY UNIQUE,
+	user_name VARCHAR(20) UNIQUE NOT NULL,
+	password VARCHAR(20) NOT NULL
+);
+
+--------------
+SESSION TABLE
+--------------
+
+CREATE TABLE session(
+	user_id INT REFERENCES users(user_id) UNIQUE,
+	ssid SERIAL PRIMARY KEY UNIQUE
+);
+
+
+-----------------
+TWEETS
+----------
+
+CREATE TABLE tweets(
+	tweet_id SERIAL PRIMARY KEY UNIQUE,
+	tweet_text VARCHAR(180) NOT NULL,
+	time_created timestamp WITHOUT TIME ZONE DEFAULT current_timestamp, 
+	user_id INT REFERENCES users(user_id)
+);
+
+
+ALTER TABLE tweets ADD CONSTRAINT tweet_text CHECK ((char_length(tweet_text) > 20) AND (char_length(tweet_text)<180));
+
+---------------------------
+FOLLOWERS/FOLLOWING mapping
+----------------------------
+
+CREATE TABLE follow_tb(
+	follower INT REFERENCES users(user_id) NOT NULL,
+	following int REFERENCES users(user_id) NOT NULL,
+	UNIQUE(follower,following)
+	CONSTRAINT you_cant_follow_you CHECK(follower!=following)
+);//add a line to say follower should not be equal to following
+//both follower + following must be unique to say friendships are not multiple
+
+adding not null constraint
+
+ALTER TABLE follow_tb ALTER COLUMN follower SET NOT NULL;
+
+--------------------------------------------------
+The Following are Functionalities for the Microbloggin implementation
+-----------------------
+VIEWS for functionalies
+-------------------------
+
+1. Functionality: Show my Tweets
+--------------------------------
+
+SELECT tweet_text,tweet_id
+FROM tweets 
+WHERE user_id IN 
+	  (SELECT user_id FROM session
+	   WHERE ssid=
+	   (handler_from_c	   	
+	   ))
+ORDER BY time_created DESC;
+
+--------------------------------------
+
+
+ex:
+SELECT tweet_text,tweet_id
+FROM tweets 
+WHERE user_id IN 
+	  (SELECT user_id FROM session
+	   WHERE ssid=
+	   (5))
+ORDER BY time_created DESC;
+
+
+
+
+2.Functionality: Delete Tweet
+-----------------------------
+//doubt ful
+DELETE FROM tweets WHERE tweet_id=tweet_id_from_c
+AND user_id=(SELECT user_id FROM session WHERE ssid=5);
+
+//and clause to enable only the user to delete his entries
+
+ex:
+DELETE FROM tweets WHERE tweet_id=14 AND user_id=(SELECT user_id FROM session WHERE ssid=5);
+
+
+2.5 Funcitonality ADD Tweet
+---------------------------------
+INSERT INTO tweets(tweet_text,user_id) VALUES ('tweet_text_from_c',(SELECT user_id FROM session WHERE ssid=user_Handler_from_c));
+
+ex:
+INSERT INTO tweets(tweet_text,user_id) VALUES ('this is test entry number1',(SELECT user_id FROM session WHERE ssid=5));
+
+3. Functionality: Show all tweets
+---------------------------------
+
+
+SELECT tweet_text,tweet_id FROM tweets 
+LEFT JOIN follow_tb ON tweets.user_id = follow_tb.following
+WHERE follow_tb.follower=
+(SELECT user_id FROM session WHERE ssid=(handler_from_c))
+
+UNION
+SELECT tweet_text,tweet_id FROM tweets WHERE user_id=(SELECT user_id FROM session WHERE ssid=(handler_from_c))
+;
+
+------------Display both the user tweets and the tweets from ppl he is follwing
+---------------------------------------------------------------------
+SELECT tweet_text,tweet_id FROM tweets 
+LEFT JOIN follow_tb ON tweets.user_id = follow_tb.following
+WHERE follow_tb.follower=
+(SELECT user_id FROM session WHERE ssid=(5))
+
+UNION
+SELECT tweet_text,tweet_id FROM tweets WHERE user_id=(SELECT user_id FROM session WHERE ssid=(5))
+;
+		
+4. Functionality: Follow USername
+---------------------------------
+INSERT INTO follow_tb VALUES(
+(SELECT user_id FROM session WHERE ssid=(handler_get_from_c)),
+(SELECT user_id FROM users WHERE user_name=('username_get_from_c') )
+);
+	ex:
+
+INSERT INTO follow_tb VALUES(
+(SELECT user_id FROM session WHERE ssid=(5)),
+(SELECT user_id FROM users WHERE user_name=('user1') )
+);
+
+
+//
+
+Follow is affecting for unknown users example a user not present in table users is able to be followed
+
+
+
+5. Fuctionality : Unfollow Username;
+-------------------------------------
+
+DELETE FROM follow_tb WHERE
+follower= (SELECT user_id FROM session WHERE ssid=(handler_get_from_c)) AND
+following=(SELECT user_id FROM users WHERE user_name=('username_get_from_c')) ;
+
+ex:
+
+DELETE FROM follow_tb WHERE
+follower= (SELECT user_id FROM session WHERE ssid=(5)) AND
+following=(SELECT user_id FROM users WHERE user_name=('user1')) ;
+
+6. Functionality : Following List:
+----------------------------------------
+SELECT user_name FROM users 
+LEFT JOIN follow_tb ON users.user_id=follow_tb.following
+WHERE follow_tb.follower=
+(SELECT user_id FROM session WHERE ssid=(handler_from_C));
+
+
+
+ex:
+
+SELECT user_name FROM users 
+LEFT JOIN follow_tb ON users.user_id=follow_tb.following
+WHERE follow_tb.follower=
+(SELECT user_id FROM session WHERE ssid=(5));
+
+
+5. Functionality: Follower List
+---------------------------------
+SELECT user_name FROM users 
+LEFT JOIN follow_tb ON users.user_id=follow_tb.follower
+WHERE follow_tb.following=
+(SELECT user_id FROM session WHERE ssid=(handler_from_c));
+
+ex:
+
+SELECT user_name FROM users 
+LEFT JOIN follow_tb ON users.user_id=follow_tb.follower
+WHERE follow_tb.following=
+(SELECT user_id FROM session WHERE ssid=(5));
+
+
+
+6. Login
+--------------------------
+//if login then get user_id else get the user1 handle
+
+
+INSERT INTO session(user_id) SELECT (SELECT user_id FROM users WHERE user_name = 'user_name_from_c') WHERE
+NOT EXISTS ( SELECT 1 FROM session WHERE user_id = (SELECT user_id FROM users WHERE user_name = 'user_name_from_c'));
+SELECT ssid FROM session WHERE user_id = (SELECT user_id FROM users WHERE user_name = 'user_name_from_c');
+
+
+example : 
+
+INSERT INTO session(user_id) SELECT (SELECT user_id FROM users WHERE user_name = 'user1') WHERE
+NOT EXISTS ( SELECT 1 FROM session WHERE user_id = (SELECT user_id FROM users WHERE user_name = 'user1'));
+SELECT ssid FROM session WHERE user_id = (SELECT user_id FROM users WHERE user_name = 'user1');
+
+
+
+
